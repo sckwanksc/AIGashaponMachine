@@ -1,0 +1,1166 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>AI 資訊素養扭蛋機：創意生圖 Prompt 工坊</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Microsoft JhengHei", Roboto, sans-serif;
+    }
+    body {
+      background: #090d16;
+      background: radial-gradient(circle at 50% 30%, #1e1b4b 0%, #090d16 100%);
+      color: #f8fafc;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 12px;
+      overflow-x: hidden;
+    }
+    #app-container {
+      width: 100%;
+      max-width: 860px;
+      background: #111827;
+      border: 2px solid #818cf8;
+      border-radius: 24px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 25px rgba(129, 140, 248, 0.25);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    /* 頂部 HUD 狀態列 */
+    .hud-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #0b0f19;
+      border-bottom: 2px solid #312e81;
+      padding: 12px 20px;
+    }
+    .hud-title {
+      font-size: 15px;
+      font-weight: 900;
+      color: #c7d2fe;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .hud-badge {
+      background: #4338ca;
+      color: #e0e7ff;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: bold;
+    }
+    .token-badge {
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      color: #fff;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 800;
+      box-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* 主舞台佈局：左側扭蛋機 ＋ 右側 5 維度卡牌展示 */
+    .stage-grid {
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      min-height: 480px;
+    }
+    @media (max-width: 768px) {
+      .stage-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* 左側：扭蛋機外觀區 */
+    .gachapon-stage {
+      background: #171e2e;
+      border-right: 2px solid #232d42;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      position: relative;
+    }
+    .machine-dome {
+      width: 220px;
+      height: 220px;
+      background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.25), rgba(129, 140, 248, 0.08) 60%, rgba(15, 23, 42, 0.8) 100%);
+      border: 4px solid #818cf8;
+      border-radius: 50%;
+      position: relative;
+      box-shadow: inset 0 0 25px rgba(129, 140, 248, 0.4), 0 10px 20px rgba(0,0,0,0.5);
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+    /* 玻璃高光 */
+    .dome-reflection {
+      position: absolute;
+      top: 15px;
+      left: 25px;
+      width: 70px;
+      height: 40px;
+      background: rgba(255, 255, 255, 0.22);
+      border-radius: 50%;
+      transform: rotate(-35deg);
+      pointer-events: none;
+    }
+    /* 扭蛋球群容器 */
+    .capsules-bin {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+    .capsule-mini {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      position: absolute;
+      border: 2px solid rgba(255,255,255,0.7);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+      transition: transform 0.4s ease;
+    }
+
+    /* 扭蛋機下身底座 */
+    .machine-body {
+      width: 240px;
+      background: linear-gradient(180deg, #4f46e5 0%, #312e81 100%);
+      border-radius: 20px 20px 14px 14px;
+      padding: 16px 14px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      box-shadow: 0 8px 18px rgba(0,0,0,0.6);
+      border: 2px solid #6366f1;
+    }
+    /* 轉盤旋鈕 */
+    .crank-knob {
+      width: 68px;
+      height: 68px;
+      background: radial-gradient(circle, #e2e8f0 0%, #94a3b8 100%);
+      border-radius: 50%;
+      border: 4px solid #f8fafc;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+      position: relative;
+    }
+    .crank-knob:active {
+      transform: scale(0.96);
+    }
+    .crank-bar {
+      width: 44px;
+      height: 12px;
+      background: #475569;
+      border-radius: 6px;
+    }
+    .crank-knob.spin-anim {
+      transform: rotate(720deg) scale(1.08);
+    }
+
+    /* 扭蛋出口 */
+    .exit-slot {
+      width: 110px;
+      height: 46px;
+      background: #0f172a;
+      border-radius: 12px;
+      margin-top: 12px;
+      border: 2px solid #1e293b;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: inset 0 4px 8px rgba(0,0,0,0.8);
+      overflow: hidden;
+    }
+    /* 滾出的扭蛋 */
+    .dropped-capsule {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      border: 2px solid #fff;
+      display: none;
+      animation: dropPop 0.6s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards;
+    }
+    @keyframes dropPop {
+      0% { transform: translateY(-40px) scale(0.4); opacity: 0; }
+      70% { transform: translateY(0) scale(1.15); opacity: 1; }
+      100% { transform: translateY(0) scale(1); opacity: 1; }
+    }
+
+    /* 右側：5個維度卡槽展示區 */
+    .slots-stage {
+      padding: 18px 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      background: #0d121f;
+    }
+    .slots-title {
+      font-size: 14px;
+      font-weight: 800;
+      color: #94a3b8;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .card-slot {
+      background: #161e2e;
+      border: 1.5px dashed #334155;
+      border-radius: 12px;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      transition: all 0.3s;
+      min-height: 58px;
+    }
+    .card-slot.active-category {
+      border-color: #818cf8;
+      background: rgba(99, 102, 241, 0.12);
+      box-shadow: 0 0 12px rgba(129, 140, 248, 0.2);
+    }
+    .card-slot.filled {
+      border-style: solid;
+      border-color: #10b981;
+      background: #132328;
+    }
+    .slot-icon {
+      font-size: 24px;
+      width: 38px;
+      height: 38px;
+      background: #1e293b;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .slot-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    .slot-cat-name {
+      font-size: 11px;
+      font-weight: 800;
+      color: #a5b4fc;
+      letter-spacing: 0.5px;
+    }
+    .slot-val-zh {
+      font-size: 14px;
+      font-weight: 800;
+      color: #f8fafc;
+      margin-top: 1px;
+    }
+    .slot-val-en {
+      font-size: 11px;
+      color: #64748b;
+      font-style: italic;
+    }
+
+    /* 底部操作面板 */
+    .bottom-bar {
+      background: #0b0f19;
+      border-top: 2px solid #1f2937;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+    .btn-quiz-cta {
+      background: linear-gradient(135deg, #4f46e5, #4338ca);
+      color: #fff;
+      font-size: 15px;
+      font-weight: 800;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 12px;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(79, 70, 229, 0.4);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s;
+    }
+    .btn-quiz-cta:hover {
+      background: linear-gradient(135deg, #6366f1, #4f46e5);
+      transform: translateY(-2px);
+    }
+    .btn-spin-action {
+      background: linear-gradient(135deg, #f59e0b, #ea580c);
+      color: #fff;
+      font-size: 15px;
+      font-weight: 900;
+      border: none;
+      padding: 12px 26px;
+      border-radius: 12px;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(245, 158, 11, 0.4);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s;
+    }
+    .btn-spin-action:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 18px rgba(245, 158, 11, 0.6);
+    }
+    .btn-spin-action:disabled {
+      background: #334155;
+      color: #64748b;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    /* 彈窗樣式 */
+    .modal-backdrop {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(11, 15, 25, 0.92);
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      z-index: 50;
+    }
+    .modal-backdrop.hidden { display: none !important; }
+
+    .modal-box {
+      background: #1a2234;
+      border: 2px solid #6366f1;
+      border-radius: 20px;
+      width: 100%;
+      max-width: 540px;
+      padding: 24px;
+      box-shadow: 0 15px 40px rgba(0,0,0,0.8);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      animation: modalPop 0.3s ease;
+    }
+    @keyframes modalPop {
+      0% { transform: scale(0.9); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    .form-row {
+      display: flex;
+      gap: 12px;
+      margin: 16px 0;
+      width: 100%;
+    }
+    .field-group {
+      flex: 1;
+      text-align: left;
+    }
+    .field-group label {
+      display: block;
+      font-size: 12px;
+      color: #94a3b8;
+      margin-bottom: 4px;
+    }
+    .field-group input {
+      width: 100%;
+      padding: 10px;
+      border-radius: 8px;
+      background: #0b0f19;
+      border: 1px solid #334155;
+      color: #fff;
+      font-size: 15px;
+      outline: none;
+    }
+
+    .choice-btn {
+      width: 100%;
+      text-align: left;
+      padding: 12px 14px;
+      margin: 6px 0;
+      background: #0b0f19;
+      border: 2px solid #29354d;
+      color: #f1f5f9;
+      border-radius: 10px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+      line-height: 1.4;
+    }
+    .choice-btn:hover { border-color: #818cf8; background: #131a29; }
+    .choice-btn.correct { border-color: #10b981; background: rgba(16, 185, 129, 0.22); color: #34d399; }
+    .choice-btn.wrong { border-color: #ef4444; background: rgba(239, 68, 68, 0.22); color: #f87171; }
+
+    .explain-card {
+      background: #0f172a;
+      border-left: 4px solid #10b981;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      color: #cbd5e1;
+      text-align: left;
+      margin-top: 12px;
+      line-height: 1.5;
+      width: 100%;
+    }
+
+    .btn-primary {
+      background: #10b981;
+      color: #022c22;
+      font-weight: 800;
+      font-size: 15px;
+      border: none;
+      border-radius: 10px;
+      padding: 12px 28px;
+      cursor: pointer;
+      margin-top: 14px;
+      transition: all 0.2s;
+    }
+    .btn-primary:hover { background: #34d399; transform: translateY(-1px); }
+
+    /* 開蛋慶祝特效彈窗 */
+    .capsule-reveal-anim {
+      width: 90px;
+      height: 90px;
+      border-radius: 50%;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 40px;
+      box-shadow: 0 0 30px rgba(255, 255, 255, 0.6);
+      animation: pulseReveal 1.2s infinite alternate;
+    }
+    @keyframes pulseReveal {
+      0% { transform: scale(0.95); }
+      100% { transform: scale(1.08); }
+    }
+
+    /* Prompt 預覽方塊 */
+    .prompt-preview-block {
+      background: #090d16;
+      border: 1px solid #374151;
+      border-radius: 10px;
+      padding: 12px;
+      text-align: left;
+      font-size: 13px;
+      color: #e2e8f0;
+      line-height: 1.5;
+      margin: 8px 0 12px 0;
+      max-height: 110px;
+      overflow-y: auto;
+      width: 100%;
+      word-break: break-word;
+    }
+
+    .prompt-header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      margin-top: 6px;
+    }
+    .btn-copy-small {
+      background: #3b82f6;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 800;
+      border: none;
+      border-radius: 6px;
+      padding: 5px 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-copy-small:hover {
+      background: #2563eb;
+      transform: scale(1.04);
+    }
+    .btn-copy-small.copied {
+      background: #10b981;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="app-container">
+    <!-- 頂部 HUD -->
+    <div class="hud-header">
+      <div class="hud-title">
+        <span>🤖 AI 資訊素養扭蛋機</span>
+        <span class="hud-badge" id="student-badge">3A(01)</span>
+      </div>
+      <div class="token-badge">
+        <span>🪙 扭蛋代幣:</span>
+        <span id="token-val" style="font-size:16px;">0</span>
+      </div>
+    </div>
+
+    <!-- 主舞台：扭蛋機 ＋ 5 個卡牌維度 -->
+    <div class="stage-grid">
+      <!-- 左：扭蛋機外觀 -->
+      <div class="gachapon-stage">
+        <!-- 透明穹頂 -->
+        <div class="machine-dome" id="machineDome">
+          <div class="dome-reflection"></div>
+          <div class="capsules-bin" id="capsulesBin">
+            <!-- 扭蛋球由 JS 動態生成 -->
+          </div>
+        </div>
+
+        <!-- 扭蛋機下座 -->
+        <div class="machine-body">
+          <div class="crank-knob" id="crankKnob" onclick="triggerSpin()">
+            <div class="crank-bar"></div>
+          </div>
+          <div style="font-size:11px; color:#c7d2fe; margin-top:8px; font-weight:bold;">轉動旋鈕扭蛋</div>
+          <!-- 出口 -->
+          <div class="exit-slot">
+            <div class="dropped-capsule" id="droppedBall"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 右：5 個維度卡牌槽 -->
+      <div class="slots-stage">
+        <div class="slots-title">
+          <span>🎨 AI 圖像提示詞維度（集齊 5 次生成）</span>
+          <span style="color:#818cf8; font-weight:900;" id="progress-val">進度: 0 / 5</span>
+        </div>
+
+        <!-- 維度 1 -->
+        <div class="card-slot active-category" id="slot-0">
+          <div class="slot-icon">🌟</div>
+          <div class="slot-info">
+            <span class="slot-cat-name">【維度 1】核心視覺主體 (Subject)</span>
+            <span class="slot-val-zh" id="val-zh-0">等待扭蛋抽取...</span>
+            <span class="slot-val-en" id="val-en-0">Pending draw...</span>
+          </div>
+        </div>
+
+        <!-- 維度 2 -->
+        <div class="card-slot" id="slot-1">
+          <div class="slot-icon">🎨</div>
+          <div class="slot-info">
+            <span class="slot-cat-name">【維度 2】藝術與畫風 (Art Style)</span>
+            <span class="slot-val-zh" id="val-zh-1">等待扭蛋抽取...</span>
+            <span class="slot-val-en" id="val-en-1">Pending draw...</span>
+          </div>
+        </div>
+
+        <!-- 維度 3 -->
+        <div class="card-slot" id="slot-2">
+          <div class="slot-icon">🏞️</div>
+          <div class="slot-info">
+            <span class="slot-cat-name">【維度 3】環境與場景 (Environment)</span>
+            <span class="slot-val-zh" id="val-zh-2">等待扭蛋抽取...</span>
+            <span class="slot-val-en" id="val-en-2">Pending draw...</span>
+          </div>
+        </div>
+
+        <!-- 維度 4 -->
+        <div class="card-slot" id="slot-3">
+          <div class="slot-icon">💡</div>
+          <div class="slot-info">
+            <span class="slot-cat-name">【維度 4】光影與氛圍 (Lighting & Mood)</span>
+            <span class="slot-val-zh" id="val-zh-3">等待扭蛋抽取...</span>
+            <span class="slot-val-en" id="val-en-3">Pending draw...</span>
+          </div>
+        </div>
+
+        <!-- 維度 5 -->
+        <div class="card-slot" id="slot-4">
+          <div class="slot-icon">📷</div>
+          <div class="slot-info">
+            <span class="slot-cat-name">【維度 5】鏡頭與渲染細節 (Camera & Render)</span>
+            <span class="slot-val-zh" id="val-zh-4">等待扭蛋抽取...</span>
+            <span class="slot-val-en" id="val-en-4">Pending draw...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 底部操作列 -->
+    <div class="bottom-bar">
+      <button class="btn-quiz-cta" id="quizBtn" onclick="openQuizModal()">
+        <span>💡 答 AI 資訊素養題賺金幣</span>
+      </button>
+
+      <button class="btn-spin-action" id="spinBtn" onclick="triggerSpin()" disabled>
+        <span>🎰 旋轉扭蛋 (消耗 1 幣)</span>
+      </button>
+    </div>
+
+    <!-- 1. 學生登入視窗 -->
+    <div class="modal-backdrop" id="loginModal">
+      <div class="modal-box">
+        <div style="font-size:46px; margin-bottom:8px;">🤖✨</div>
+        <h2 style="color:#c7d2fe; margin-bottom:6px;">AI 資訊素養扭蛋機</h2>
+        <p style="font-size:13px; color:#94a3b8; line-height:1.5;">
+          解答「AI 倫理、版權與私隱」素養考驗換取扭蛋金幣！扭滿 5 次解鎖專屬的生圖 Prompt！
+        </p>
+
+        <div class="form-row">
+          <div class="field-group">
+            <label>班別 (Class)</label>
+            <input type="text" id="in-class" value="3A" maxlength="6">
+          </div>
+          <div class="field-group">
+            <label>學號 (Class No.)</label>
+            <input type="number" id="in-no" value="01">
+          </div>
+        </div>
+
+        <button class="btn-primary" onclick="startGame()">進入扭蛋工坊</button>
+      </div>
+    </div>
+
+    <!-- 2. AI 素養問答視窗 -->
+    <div class="modal-backdrop hidden" id="quizModal">
+      <div class="modal-box" style="max-width:540px;">
+        <span style="font-size:11px; color:#a5b4fc; font-weight:800; letter-spacing:1px;" id="q-cat">【AI 資訊素養考驗】</span>
+        <h3 id="q-text" style="margin:10px 0 14px 0; font-size:16px; color:#f8fafc; line-height:1.5;">題目載入中...</h3>
+
+        <div style="width:100%;" id="q-options"></div>
+
+        <div id="q-exp" class="explain-card hidden"></div>
+        <button class="btn-primary hidden" id="q-close-btn" onclick="closeQuizModal()">獲得金幣，前往扭蛋！</button>
+      </div>
+    </div>
+
+    <!-- 3. 開蛋成功慶祝視窗 -->
+    <div class="modal-backdrop hidden" id="revealModal">
+      <div class="modal-box">
+        <div class="capsule-reveal-anim" id="revealBallIcon">✨</div>
+        <span style="font-size:12px; color:#a5b4fc; font-weight:800;" id="revealCatTitle">【維度獲得】</span>
+        <h3 style="font-size:20px; color:#38bdf8; margin:6px 0;" id="revealZh">詞彙名稱</h3>
+        <p style="font-size:13px; color:#94a3b8; font-style:italic; margin-bottom:14px;" id="revealEn">English Tag</p>
+
+        <button class="btn-primary" onclick="closeRevealModal()">放入提示詞工坊</button>
+      </div>
+    </div>
+
+    <!-- 4. 最終 Prompt 組合結算視窗（支援獨立複製中/英文） -->
+    <div class="modal-backdrop hidden" id="finalModal">
+      <div class="modal-box" style="max-width:560px;">
+        <div style="font-size:42px; margin-bottom:4px;">🎉🖼️</div>
+        <h2 style="color:#facc15; margin-bottom:4px;">5 次扭蛋完成！Prompt 拼裝成功！</h2>
+        <p style="font-size:13px; color:#94a3b8; margin-bottom:12px;">
+          你已集齊 5 大提示詞維度，點擊對應按鈕複製中文或英文指令：
+        </p>
+
+        <!-- 英文 Prompt 區塊 -->
+        <div class="prompt-header-row">
+          <span style="font-size:12px; color:#38bdf8; font-weight:bold;">🇺🇸 標準英文生圖指令 (推薦 Midjourney / Bing / DALL-E 3)：</span>
+          <button class="btn-copy-small" id="btnCopyEn" onclick="copyPrompt('en')">📋 複製英文</button>
+        </div>
+        <div class="prompt-preview-block" id="finalEnPrompt"></div>
+
+        <!-- 中文 Prompt 區塊 -->
+        <div class="prompt-header-row">
+          <span style="font-size:12px; color:#10b981; font-weight:bold;">🇭🇰 繁體中文生圖指令 (支援繁中生圖 / 課堂紀錄)：</span>
+          <button class="btn-copy-small" id="btnCopyZh" onclick="copyPrompt('zh')">📋 複製中文</button>
+        </div>
+        <div class="prompt-preview-block" id="finalZhPrompt"></div>
+
+        <div style="display:flex; gap:10px; width:100%; margin-top:10px;">
+          <button class="btn-primary" style="flex:1; background:#4f46e5; color:#fff;" onclick="copyPrompt('en')">📋 一鍵複製英文 Prompt</button>
+          <button class="btn-primary" style="flex:1; background:#059669; color:#fff;" onclick="copyPrompt('zh')">📋 一鍵複製中文 Prompt</button>
+          <button class="btn-primary" style="flex:0.8; background:#334155; color:#cbd5e1;" onclick="restartExperience()">🔄 重新扭蛋</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- 1. AI 資訊素養 12 道精选题庫 ---
+    const LITERACY_QUIZ_DB = [
+      {
+        cat: "AI 幻覺與真實性查證",
+        q: "當生成式 AI 很有自信地給出看似合理、但實際完全捏造的歷史事件或數據，這種現象被稱作：",
+        opts: ["AI 幻覺 (AI Hallucination)", "AI 深度思考 (Deep Thinking)", "程式編碼漏洞 (Bug)"],
+        correctText: "AI 幻覺 (AI Hallucination)",
+        exp: "大型語言模型是依機率預測下一個字詞，並非真正「理解」客觀事實，因此不可未經查證便全盤相信其輸出。"
+      },
+      {
+        cat: "深度偽造與防詐意識",
+        q: "收到親友在視訊通話中神情慌張要求立刻轉帳的求救影像，在 AI 時代最安全的查證方法是：",
+        opts: ["立即掛斷，透過既有的私人電話或面對面等其他渠道再三核實", "馬上匯款救人，以免延誤時機", "只要看畫面嘴型有動就一定是真的"],
+        correctText: "立即掛斷，透過既有的私人電話或面對面等其他渠道再三核實",
+        exp: "Deepfake 深度偽造技術能即時擬真換臉與仿造聲音，遇緊急索款必須透過可信的第三方途徑二次確認。"
+      },
+      {
+        cat: "個人私隱與提示詞安全",
+        q: "在使用公共生成式 AI 聊天機器人時，以下哪項資訊絕對不應該輸入到提示詞 (Prompt) 中？",
+        opts: ["自己的身分證號碼、住址或學校密碼", "課堂演講的講稿大綱請求修改意見", "請 AI 解釋牛頓運動定律的物理公式"],
+        correctText: "自己的身分證號碼、住址或學校密碼",
+        exp: "輸入至公共雲端 AI 的提示詞可能被納入模型訓練資料庫，輸入個人敏感私隱資料有極大外洩風險。"
+      },
+      {
+        cat: "AI 偏見與多元性",
+        q: "若要求 AI 生成「醫生與護士」的圖片，畫面總是出現「男性醫生與女性護士」，這代表：",
+        opts: ["訓練資料中反映了人類社會既有的刻板印象與偏見", "AI 具有人類的真實自我意識與主觀偏好", "只有男性在現實生活中才能擔任醫生"],
+        correctText: "訓練資料中反映了人類社會既有的刻板印象與偏見",
+        exp: "AI 的輸出直接反映了訓練數據中的歷史偏差；使用者應具備批判性思維，主動在 Prompt 中加入多元性要求。"
+      },
+      {
+        cat: "學術誠信與 AI 揭露",
+        q: "學生用 AI 生成了一張非常精美的插畫並獲得全港冠軍，在遞交參賽作品時最符合學術誠信的做法是：",
+        opts: ["主動標註「本作品由 AI 輔助生成」並附上提示詞與創作過程", "堅稱是自己用手繪板一筆一畫親手繪製", "將 AI 浮水印塗黑掩飾是 AI 的作品"],
+        correctText: "主動標註「本作品由 AI 輔助生成」並附上提示詞與創作過程",
+        exp: "誠實揭露 AI 工具的使用並公開創作流程（Transparency），是數碼時代不可或缺的學術與創作誠信。"
+      },
+      {
+        cat: "論文引文真偽檢索",
+        q: "在寫學校專題報告時，若引用了 AI 所提供的科學研究論文篇名與作者，學生最應該做的是：",
+        opts: ["必須親自在學術搜尋引擎或圖書館檢索，確認論文真實存在", "直接複製貼在參考文獻中，因為 AI 不會出錯", "只要文筆通順就當作真實科學證據"],
+        correctText: "必須親自在學術搜尋引擎或圖書館檢索，確認論文真實存在",
+        exp: "生成式 AI 經常會「虛構」不存在的論文名稱與學者姓名，任何引文都必須追溯權威第一手來源。"
+      },
+      {
+        cat: "演算法與資訊繭房",
+        q: "社交平台演算法會持續向你推薦立場相似的 AI 生成影音，長期下來最容易造成：",
+        opts: ["思想極端化與資訊繭房（回音室效應）", "視野變得全面而客觀包容", "記憶力與閱讀能力倍增"],
+        correctText: "思想極端化與資訊繭房（回音室效應）",
+        exp: "演算法會強化單一立場的認知，主動接觸多元觀點並主動查核事實才能突破演算法圍牆。"
+      },
+      {
+        cat: "綠色創科與 AI 能耗",
+        q: "頻繁使用大型生成式 AI 繪製超高解析度圖像，對環境的主要隱形代價是：",
+        opts: ["數據中心超級電腦運算帶來龐大的電力消耗與碳排放", "會直接排放有毒廢水至河流中", "會迅速耗盡地球上所有的矽元素"],
+        correctText: "數據中心超級電腦運算帶來龐大的電力消耗與碳排放",
+        exp: "訓練與運行 AI 大模型需消耗巨量電能與冷卻用水，適度使用與精準提示能支持綠色運算。"
+      },
+      {
+        cat: "人類自主與創意思維",
+        q: "在創科時代，面對強大的生成式 AI 工具，人類最重要的核心價值應當是：",
+        opts: ["創意思維、審美品味、批判性判斷與同理心", "比 AI 背誦更多百科全書資料", "機械性地重複描繪線條"],
+        correctText: "創意思維、審美品味、批判性判斷與同理心",
+        exp: "AI 是強大的創意放大器，但審美品味、問題定義、價值判斷與人情關懷始終依賴人類的智慧與靈魂。"
+      },
+      {
+        cat: "AI 釣魚與網絡安全",
+        q: "現代網絡釣魚郵件越來越難以透過「錯別字」辨認，主要原因是黑客利用了 AI 哪項能力？",
+        opts: ["利用大型語言模型生成語法完美且符合特定語氣的偽造郵件", "AI 能夠控制全球光纖電纜", "AI 可以自動穿透所有物理防火牆"],
+        correctText: "利用大型語言模型生成語法完美且符合特定語氣的偽造郵件",
+        exp: "生成式 AI 使詐騙郵件的文字無懈可擊，因此必須仔細核對寄件者郵件網址而非單看語法。"
+      },
+      {
+        cat: "肖像權與數碼尊重",
+        q: "未經同學同意，私自使用同學的生活照片訓練 AI 模型生成搞笑或醜化迷因圖，這違反了：",
+        opts: ["同學的肖像權與人際數碼尊重倫理", "只有學校校規，法律完全不予規範", "完全沒有任何道德問題"],
+        correctText: "同學的肖像權與人際數碼尊重倫理",
+        exp: "任何個人生物特徵與照片均屬個人私隱，未經授權使用其肖像進行合成可能侵犯私隱與肖像權。"
+      },
+      {
+        cat: "負責任 AI 倫理護欄",
+        q: "科技公司在推出 AI 工具時，設立「防止生成暴力、色情與仇恨言論」的安全護欄，體現了：",
+        opts: ["負責任的人工智能發展原則 (Responsible AI)", "為了限制使用者的個人言論自由", "節省伺服器運算成本的手法"],
+        correctText: "負責任的人工智能發展原則 (Responsible AI)",
+        exp: "負責任的 AI 必須設立倫理邊界，確保科技造福社會而非被濫用於散佈仇恨或危害。"
+      }
+    ];
+
+    // --- 2. 5 大範疇提示詞（Prompt）詞彙庫 ---
+    const PROMPT_CATEGORIES = [
+      {
+        id: 0,
+        name: "核心主體 (Subject)",
+        icon: "🌟",
+        pool: [
+          { zh: "穿太空服的探險柴犬宇航員", en: "a space-suited Shiba Inu astronaut explorer" },
+          { zh: "蒸氣龐克發明家貓頭鷹學者", en: "a steampunk inventor owl scholar with brass goggles" },
+          { zh: "守護古代智慧晶片的懸浮賽博巨龍", en: "a floating cyber dragon guardian protecting an ancient wisdom microchip" },
+          { zh: "戴全息眼鏡的未來中學生發明家", en: "a futuristic teenage student inventor wearing holographic AR smart glasses" },
+          { zh: "由發光金屬與藤蔓交織的綠能守護機械人", en: "an eco-friendly robotic golem woven from glowing metal and green vines" }
+        ]
+      },
+      {
+        id: 1,
+        name: "藝術風格 (Art Style)",
+        icon: "🎨",
+        pool: [
+          { zh: "溫馨治癒的吉卜力宮崎駿手繪水彩動畫風", en: "Studio Ghibli inspired anime watercolor aesthetic, detailed hand-drawn textures" },
+          { zh: "新海誠電影般清透耀眼的藍天白雲光影風", en: "Makoto Shinkai style, vibrant luminous sky, high clarity anime art" },
+          { zh: "立體皮克斯 3D 黏土定格動畫風格", en: "Pixar style 3D claymation, soft tactile clay textures, playful charm" },
+          { zh: "超未來賽博朋克霓虹概念藝術風", en: "cyberpunk concept art, neon glow, intricate high-tech industrial linework" },
+          { zh: "經典復古 80 年代蒸汽波復古像素風", en: "retro 1980s vaporwave pixel art, nostalgic synthwave colors" }
+        ]
+      },
+      {
+        id: 2,
+        name: "環境場景 (Environment)",
+        icon: "🏞️",
+        pool: [
+          { zh: "漂浮在雲端之上的太陽能植物溫室空中城", en: "set inside a floating solar-powered sky greenhouse above the fluffy clouds" },
+          { zh: "散發生物發光珊瑚與水晶的深海科技城", en: "in a bioluminescent deep-sea underwater metropolis with glowing crystal domes" },
+          { zh: "鋪滿銀杏金黃落葉的未來科技校園操場", en: "in a futuristic high-tech school playground blanketed with golden ginkgo leaves" },
+          { zh: "隱藏在古老雨林深處的巨大全息量子圖書館", en: "inside an ancient rainforest quantum library with towering holographic book shelves" },
+          { zh: "夕陽映照下的火星綠洲先鋒科研基地", en: "at a sunset terraformed Mars oasis research outpost with biodomes" }
+        ]
+      },
+      {
+        id: 3,
+        name: "光影氛圍 (Lighting & Mood)",
+        icon: "💡",
+        pool: [
+          { zh: "金色夕陽穿透樹葉的丁達爾聖光光束", en: "illuminated by golden hour sunlight with volumetric god rays and Tyndall effect" },
+          { zh: "賽博朋克霓虹紫與青藍雙色對比光暈", en: "dramatic dual-tone neon cyan and magenta rim lighting, vibrant glows" },
+          { zh: "清晨柔和微霧中的純淨清透冷色散射光", en: "bathed in soft morning mist with gentle diffuse cool ethereal lighting" },
+          { zh: "電影感強烈、充滿明暗對比的戲劇性光影", en: "cinematic chiaroscuro, intense dramatic shadow contrast, warm backlight" },
+          { zh: "璀璨夢幻的銀河星空光塵與微光粒子", en: "surrounded by celestial galaxy starlight and magical twinkling dust particles" }
+        ]
+      },
+      {
+        id: 4,
+        name: "鏡頭與渲染 (Camera & Render)",
+        icon: "📷",
+        pool: [
+          { zh: "8K 劇院級畫質、極致微距特寫、夢幻淺景深", en: "cinematic 8k resolution, extreme macro close-up, creamy shallow depth of field, f/1.8" },
+          { zh: "無人機超廣角航拍俯瞰大景、震撼透視感", en: "wide-angle aerial drone photography, breathtaking epic scale, panoramic perspective" },
+          { zh: "精緻細膩的 45 度等軸測 3D 透視視角", en: "isometric 3D perspective, ultra-clean miniature diorama view, intricate details" },
+          { zh: "虛幻引擎 5 (Unreal Engine 5) 寫實光線追蹤渲染", en: "rendered in Unreal Engine 5, ray tracing reflections, Octane render quality" },
+          { zh: "動態瞬間抓拍、生動電影感動態模糊", en: "dynamic action snapshot, authentic shutter speed, cinematic motion blur" }
+        ]
+      }
+    ];
+
+    // --- 遊戲狀態 ---
+    let student = { cls: "3A", no: "01" };
+    let tokens = 0;
+    let currentStep = 0; // 0 到 4 分別對應 5 個維度
+    let chosenWords = []; // 存儲 5 個維度抽出的詞彙
+    let quizDeck = [...LITERACY_QUIZ_DB];
+    let isSpinning = false;
+
+    // 洗牌演算法 (Fisher-Yates Shuffle)
+    function shuffleArray(arr) {
+      const copy = [...arr];
+      for (let i = copy.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copy[i], copy[j]] = [copy[j], copy[i]];
+      }
+      return copy;
+    }
+
+    // 初始化扭蛋穹頂內的迷你球
+    function initDomeCapsules() {
+      const bin = document.getElementById("capsulesBin");
+      bin.innerHTML = "";
+      const colors = [
+        "radial-gradient(circle at 30% 30%, #ef4444, #991b1b)",
+        "radial-gradient(circle at 30% 30%, #3b82f6, #1e40af)",
+        "radial-gradient(circle at 30% 30%, #10b981, #065f46)",
+        "radial-gradient(circle at 30% 30%, #f59e0b, #b45309)",
+        "radial-gradient(circle at 30% 30%, #8b5cf6, #5b21b6)",
+        "radial-gradient(circle at 30% 30%, #ec4899, #9d174d)"
+      ];
+
+      for (let i = 0; i < 14; i++) {
+        const ball = document.createElement("div");
+        ball.className = "capsule-mini";
+        ball.style.background = colors[i % colors.length];
+        ball.style.left = (20 + Math.random() * 140) + "px";
+        ball.style.top = (40 + Math.random() * 130) + "px";
+        bin.appendChild(ball);
+      }
+    }
+
+    // 扭蛋機搖晃動畫
+    function shakeDomeCapsules() {
+      const balls = document.querySelectorAll(".capsule-mini");
+      balls.forEach(b => {
+        const rx = (Math.random() - 0.5) * 50;
+        const ry = (Math.random() - 0.5) * 50;
+        b.style.transform = `translate(${rx}px, ${ry}px) rotate(${Math.random() * 360}deg)`;
+      });
+    }
+
+    // 開始遊戲
+    function startGame() {
+      const cls = document.getElementById("in-class").value.trim().toUpperCase() || "3A";
+      const no = document.getElementById("in-no").value.trim() || "01";
+      student = { cls, no };
+
+      document.getElementById("student-badge").textContent = `${student.cls}(${student.no})`;
+      document.getElementById("loginModal").classList.add("hidden");
+      initDomeCapsules();
+      updateHUD();
+      setTimeout(openQuizModal, 300);
+    }
+
+    // 更新介面狀態
+    function updateHUD() {
+      document.getElementById("token-val").textContent = tokens;
+      document.getElementById("progress-val").textContent = `進度: ${currentStep} / 5`;
+
+      const spinBtn = document.getElementById("spinBtn");
+      spinBtn.disabled = (tokens <= 0 || isSpinning || currentStep >= 5);
+
+      if (tokens > 0 && currentStep < 5) {
+        spinBtn.textContent = `🎰 旋轉第 ${currentStep + 1} 蛋 (消耗 1 幣)`;
+      } else if (currentStep >= 5) {
+        spinBtn.textContent = `✨ 5 蛋已集齊！`;
+      } else {
+        spinBtn.textContent = `⚠️ 請先答題換取金幣`;
+      }
+
+      // 高亮當前等待填入的卡牌槽
+      for (let i = 0; i < 5; i++) {
+        const slot = document.getElementById(`slot-${i}`);
+        slot.classList.remove("active-category");
+        if (i === currentStep && currentStep < 5) {
+          slot.classList.add("active-category");
+        }
+      }
+    }
+
+    // --- 素養問答系統（選項隨機打亂） ---
+    let activeQ = null;
+
+    function openQuizModal() {
+      if (quizDeck.length === 0) {
+        quizDeck = [...LITERACY_QUIZ_DB];
+      }
+      const randIdx = Math.floor(Math.random() * quizDeck.length);
+      activeQ = quizDeck.splice(randIdx, 1)[0];
+
+      // 將選項動態隨機打亂
+      const shuffledOptions = shuffleArray(activeQ.opts);
+
+      document.getElementById("q-cat").textContent = `【${activeQ.cat}】`;
+      document.getElementById("q-text").textContent = activeQ.q;
+
+      const optsBox = document.getElementById("q-options");
+      optsBox.innerHTML = "";
+      shuffledOptions.forEach((optText, i) => {
+        const btn = document.createElement("button");
+        btn.className = "choice-btn";
+        btn.innerHTML = `<b>${String.fromCharCode(65 + i)}.</b> ${optText}`;
+        btn.onclick = () => handleAnswer(optText, btn);
+        optsBox.appendChild(btn);
+      });
+
+      document.getElementById("q-exp").classList.add("hidden");
+      document.getElementById("q-close-btn").classList.add("hidden");
+      document.getElementById("quizModal").classList.remove("hidden");
+    }
+
+    function handleAnswer(chosenText, btn) {
+      const isCorrect = (chosenText === activeQ.correctText);
+      const allBtns = document.querySelectorAll(".choice-btn");
+      allBtns.forEach(b => b.onclick = null);
+
+      const expBox = document.getElementById("q-exp");
+      expBox.classList.remove("hidden");
+
+      if (isCorrect) {
+        btn.classList.add("correct");
+        tokens++;
+        expBox.innerHTML = `<b style="color:#10b981;">🎉 回答正確！獲得 1 枚扭蛋金幣 🪙！</b><br>${activeQ.exp}`;
+        document.getElementById("q-close-btn").textContent = "投入金幣，前往扭蛋！";
+      } else {
+        btn.classList.add("wrong");
+        allBtns.forEach(b => {
+          if (b.textContent.includes(activeQ.correctText)) {
+            b.classList.add("correct");
+          }
+        });
+        expBox.innerHTML = `<b style="color:#ef4444;">❌ 答錯了！請理解後再接再厲！<br>正確答案是：${activeQ.correctText}</b><br>${activeQ.exp}`;
+        document.getElementById("q-close-btn").textContent = "重新挑戰下一題！";
+      }
+
+      document.getElementById("q-close-btn").classList.remove("hidden");
+      updateHUD();
+    }
+
+    function closeQuizModal() {
+      document.getElementById("quizModal").classList.add("hidden");
+      updateHUD();
+    }
+
+    // --- 扭蛋動畫觸發機制 ---
+    function triggerSpin() {
+      if (tokens <= 0 || isSpinning || currentStep >= 5) return;
+
+      isSpinning = true;
+      tokens--;
+      updateHUD();
+
+      // 旋鈕旋轉動畫
+      const knob = document.getElementById("crankKnob");
+      knob.classList.add("spin-anim");
+
+      // 穹頂內部扭蛋球激烈震顫
+      shakeDomeCapsules();
+
+      // 滾出扭蛋球動畫
+      const droppedBall = document.getElementById("droppedBall");
+      const ballColors = [
+        "radial-gradient(circle at 30% 30%, #ef4444, #991b1b)",
+        "radial-gradient(circle at 30% 30%, #3b82f6, #1e40af)",
+        "radial-gradient(circle at 30% 30%, #10b981, #065f46)",
+        "radial-gradient(circle at 30% 30%, #f59e0b, #b45309)",
+        "radial-gradient(circle at 30% 30%, #8b5cf6, #5b21b6)"
+      ];
+      droppedBall.style.background = ballColors[currentStep % ballColors.length];
+      droppedBall.style.display = "block";
+
+      setTimeout(() => {
+        knob.classList.remove("spin-anim");
+        revealCapsuleResult();
+      }, 750);
+    }
+
+    // 開蛋揭曉詞彙彈窗
+    let currentDrawnWord = null;
+
+    function revealCapsuleResult() {
+      const category = PROMPT_CATEGORIES[currentStep];
+      // 隨機抽取該維度其中一個詞彙
+      const wordIdx = Math.floor(Math.random() * category.pool.length);
+      currentDrawnWord = category.pool[wordIdx];
+
+      document.getElementById("revealCatTitle").textContent = `【第 ${currentStep + 1} 蛋】${category.name}`;
+      document.getElementById("revealBallIcon").textContent = category.icon;
+      document.getElementById("revealZh").textContent = currentDrawnWord.zh;
+      document.getElementById("revealEn").textContent = currentDrawnWord.en;
+
+      document.getElementById("revealModal").classList.remove("hidden");
+    }
+
+    function closeRevealModal() {
+      document.getElementById("revealModal").classList.add("hidden");
+      document.getElementById("droppedBall").style.display = "none";
+
+      // 填入右側卡片槽
+      const slot = document.getElementById(`slot-${currentStep}`);
+      slot.classList.add("filled");
+      document.getElementById(`val-zh-${currentStep}`).textContent = currentDrawnWord.zh;
+      document.getElementById(`val-en-${currentStep}`).textContent = currentDrawnWord.en;
+
+      chosenWords.push(currentDrawnWord);
+      currentStep++;
+      isSpinning = false;
+      updateHUD();
+
+      // 若已集滿 5 蛋，彈出最終 Prompt 組合視窗
+      if (currentStep >= 5) {
+        setTimeout(assembleFinalPrompt, 400);
+      }
+    }
+
+    // --- 組合最終生圖 Prompt ---
+    let assembledEnPrompt = "";
+    let assembledZhPrompt = "";
+
+    function assembleFinalPrompt() {
+      // 英文生圖 Prompt 格式串聯
+      const enTags = chosenWords.map(w => w.en).join(", ");
+      assembledEnPrompt = `${enTags}, masterpiece, highly detailed, trending on ArtStation`;
+
+      // 繁體中文生圖 Prompt（以逗號自然連接成生圖描述句）
+      const zhTags = chosenWords.map(w => w.zh).join("，");
+      assembledZhPrompt = `${zhTags}，高清細節，傑作`;
+
+      document.getElementById("finalEnPrompt").textContent = assembledEnPrompt;
+      document.getElementById("finalZhPrompt").textContent = assembledZhPrompt;
+
+      // 重設複製按鈕狀態
+      resetCopyBtnStyle("btnCopyEn", "📋 複製英文");
+      resetCopyBtnStyle("btnCopyZh", "📋 複製中文");
+
+      document.getElementById("finalModal").classList.remove("hidden");
+    }
+
+    function resetCopyBtnStyle(btnId, defaultText) {
+      const btn = document.getElementById(btnId);
+      if (btn) {
+        btn.classList.remove("copied");
+        btn.textContent = defaultText;
+      }
+    }
+
+    // 複製 Prompt 到剪貼簿（支援選擇 'zh' 或 'en'）
+    function copyPrompt(lang) {
+      const textToCopy = (lang === "zh") ? assembledZhPrompt : assembledEnPrompt;
+      const langName = (lang === "zh") ? "中文" : "英文";
+      const targetBtn = (lang === "zh") ? document.getElementById("btnCopyZh") : document.getElementById("btnCopyEn");
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(textToCopy).then(() => {
+          handleCopySuccess(targetBtn, langName);
+        }).catch(() => {
+          fallbackCopy(textToCopy, targetBtn, langName);
+        });
+      } else {
+        fallbackCopy(textToCopy, targetBtn, langName);
+      }
+    }
+
+    function fallbackCopy(text, btn, langName) {
+      const temp = document.createElement("textarea");
+      temp.value = text;
+      document.body.appendChild(temp);
+      temp.select();
+      document.execCommand("copy");
+      document.body.removeChild(temp);
+      handleCopySuccess(btn, langName);
+    }
+
+    function handleCopySuccess(btn, langName) {
+      if (btn) {
+        btn.classList.add("copied");
+        btn.textContent = "✅ 已複製！";
+        setTimeout(() => {
+          btn.classList.remove("copied");
+          btn.textContent = (langName === "中文") ? "📋 複製中文" : "📋 複製英文";
+        }, 2200);
+      }
+      alert(`✅ ${langName}生圖 Prompt 已成功複製至剪貼簿！可直接貼上使用！`);
+    }
+
+    // 重新體驗
+    function restartExperience() {
+      tokens = 0;
+      currentStep = 0;
+      chosenWords = [];
+      quizDeck = [...LITERACY_QUIZ_DB];
+
+      for (let i = 0; i < 5; i++) {
+        const slot = document.getElementById(`slot-${i}`);
+        slot.classList.remove("filled");
+        document.getElementById(`val-zh-${i}`).textContent = "等待扭蛋抽取...";
+        document.getElementById(`val-en-${i}`).textContent = "Pending draw...";
+      }
+
+      document.getElementById("finalModal").classList.add("hidden");
+      updateHUD();
+      setTimeout(openQuizModal, 300);
+    }
+  </script>
+</body>
+</html>
